@@ -1,0 +1,8 @@
+{
+  "name": "spotify-playlist-formatter",
+  "version": "1.0.0",
+  "main": "index.js",
+  "devDependencies": {
+    "csv-parse": "^5.1.0"
+  }
+}
