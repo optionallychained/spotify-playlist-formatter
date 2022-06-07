@@ -2,6 +2,19 @@ const path = require('path');
 const fs = require('fs');
 const { parse } = require('csv-parse');
 
+// make an initial album entry for an artist
+const makeAlbumEntry = (albumName, releaseDate, trackName) => ({
+	album: albumName,
+	release: releaseDate,
+	tracks: [trackName]
+});
+
+// make an initial artist entry
+const makeArtistEntry = (artistName, albumName, releaseDate, trackName) => ({
+	artist: artistName,
+	albums: [makeAlbumEntry(albumName, releaseDate, trackName)]
+});
+
 // run a file through csv-parse, handing records off to formatFile() when done
 const parseFile = (file) => {
 	console.log('Parsing File', file);
@@ -53,29 +66,12 @@ const formatFile = (file, records) => {
 			}
 			else {
 				// new album encountered; initialise its entry
-				output[artistIndex].albums.push({
-					album: albumName,
-					release: releaseDate,
-					tracks: [
-						trackName
-					]
-				});
+				output[artistIndex].albums.push(makeAlbumEntry(albumName, releaseDate, trackName));
 			}
 		}
 		else {
 			// new artist encountered; initialise its entry
-			output.push({
-				artist: artistName,
-				albums: [
-					{
-						album: albumName,
-						release: releaseDate,
-						tracks: [
-							trackName,
-						]
-					}
-				]
-			})
+			output.push(makeArtistEntry(artistName, albumName, releaseDate, trackName))
 		}
 	});
 
