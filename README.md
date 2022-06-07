@@ -43,6 +43,7 @@ Metallica , Now That We’re Dead , Hardwired…To Self-Destruct , 2016-11-18
 ```json
 [
     {
+        "Export Date": "2022-01-30",
         "Artist Count": 2,
         "Track Count": 10
     },

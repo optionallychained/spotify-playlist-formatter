@@ -2,102 +2,101 @@ const path = require('path');
 const fs = require('fs');
 const { parse } = require('csv-parse');
 
-let files = fs.readdirSync(path.resolve('./in')).filter((file) => !file.startsWith('.')).map((file) => path.resolve('./in', file));
+// run a file through csv-parse, handing records off to formatFile() when done
+const parseFile = (file) => {
+	console.log('Parsing File', file);
 
-files.forEach((file) => {
-	console.log('PROCESSING FILE', file);
-
-	const csv = [];
-
-	fs.createReadStream(file)
-		.pipe(parse({
-			relaxColumnCount: true,
-			relax_quotes: true,
-			delimiter: ' , '
-		}))
-		.on('data', (csvrow) => {
-			if (csvrow[0] !== 'Arist(s) Name,Track Name,Album Name,Release Date') {
-				csv.push(csvrow);
+	parse(
+		fs.readFileSync(file, 'utf8'),
+		{
+			delimiter: ' , ',
+			relaxQuotes: true,
+			relaxColumnCount: true
+		},
+		(err, records) => {
+			if (err) {
+				throw err;
 			}
-		})
-		.on('end', () => {
-			const indices = {
-				artist: 0,
-				track: 1,
-				album: 2,
-				date: 3
-			};
 
-			const artists = [];
-			let trackCount = 0;
+			// first record will be of length 1 (column titles); discard it
+			formatFile(file, records.filter((record) => record.length > 1));
+		}
+	);
+};
 
-			csv.forEach((block) => {
-				trackCount++;
+// format a set of parsed csv records and write to ./out
+const formatFile = (file, records) => {
+	console.log('Formatting File', file);
 
-				const blockData = {
-					artist: block[indices.artist].replaceAll('\"', "'"),
-					track: block[indices.track].replace('\\"', "'"),
-					album: block[indices.album].replace('\\"', "'"),
-					date: block[indices.date].replace('\\"', "'"),
-				};
+	const output = [];
+	let trackCount = 0;
 
-				const artistIndex = artists.findIndex((artist) => {
-					return artist.artist === blockData.artist;
+	// first record will be of length 1 (column titles); discard it
+	records.forEach((record) => {
+		trackCount++;
+
+		// clean up quotes in parsed records
+		const [artistName, trackName, albumName, releaseDate] = [
+			record[0].replaceAll('\"', "'"),
+			record[1].replaceAll('\\"', "'"),
+			record[2].replaceAll('\\"', "'"),
+			record[3].replaceAll('\\"', "'"),
+		];
+
+		const artistIndex = output.findIndex((artist) => artist.artist === artistName);
+		if (artistIndex > -1) {
+			// artist was already encountered; add to its entry
+			const albumIndex = output[artistIndex].albums.findIndex((album) => album.album === albumName);
+			if (albumIndex > -1) {
+				// album was already encountered; add track to its entry
+				output[artistIndex].albums[albumIndex].tracks.push(trackName);
+			}
+			else {
+				// new album encountered; initialise its entry
+				output[artistIndex].albums.push({
+					album: albumName,
+					release: releaseDate,
+					tracks: [
+						trackName
+					]
 				});
-
-				if (artistIndex > -1) {
-					const artistData = artists[artistIndex];
-
-					// artist already partially processed
-					const albumIndex = artistData.albums.findIndex((album) => {
-						return album.album === blockData.album;
-					});
-
-					if (albumIndex > -1) {
-						// album already partially processed
-						artistData.albums[albumIndex].tracks.push(blockData.track);
-					}
-					else {
-						// new album
-						artistData.albums.push({
-							album: blockData.album,
-							release: blockData.date,
-							tracks: [
-								blockData.track
-							]
-						});
-					}
-				}
-				else {
-					// new artist
-					artists.push({
-						artist: blockData.artist,
-						albums: [
-							{
-								album: blockData.album.replace('\\"', "'"),
-								release: blockData.date,
-								tracks: [
-									blockData.track,
-								]
-							}
+			}
+		}
+		else {
+			// new artist encountered; initialise its entry
+			output.push({
+				artist: artistName,
+				albums: [
+					{
+						album: albumName,
+						release: releaseDate,
+						tracks: [
+							trackName,
 						]
-					})
-				}
-			});
+					}
+				]
+			})
+		}
+	});
 
-			artists.forEach((artistData) => {
-				// sort artist's albums by release date
-				artistData.albums.sort((a, b) => new Date(a.release).getTime() - new Date(b.release).getTime());
-			});
+	// sort each artist's albums by release date
+	output.forEach((artist) => {
+		artist.albums.sort((a, b) => new Date(a.release).getTime() - new Date(b.release).getTime);
+	});
 
-			// sort artists by alphabet
-			artists.sort((a, b) => a.artist.localeCompare(b.artist, undefined, { ignorePunctuation: true }));
+	// sort artists alphabetically
+	output.sort((a, b) => a.artist.localeCompare(b.artist, undefined, { ignorePunctuation: true }));
 
-			// add playlist size info to top of structure
-			artists.splice(0, 0, { 'Artist Count': artists.length, 'Track Count': trackCount });
+	// splice in playlist size info + export date to output[0]
+	output.splice(0, 0, { 'Export Date': new Date().toISOString().slice(0, 10), 'Artist Count': output.length, 'Track Count': trackCount });
 
-			// output
-			const output = path.resolve(file, '../../', 'out', path.basename(file).replace(/\..+/, '.json'));
-			fs.writeFileSync(output, JSON.stringify(artists, null, 2));
-		});
-});
+	// write
+	fs.writeFileSync(
+		path.resolve(file, '../../', 'out', path.basename(file).replace(/\..+/, '.json')),
+		JSON.stringify(output, null, 2)
+	);
+};
+
+// process all files in ./in, excluding .gitkeep
+const files = fs.readdirSync(path.resolve('./in')).filter((file) => !file.startsWith('.')).map((file) => path.resolve('./in', file));
+files.forEach(parseFile);
