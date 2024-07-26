@@ -2,17 +2,23 @@ const path = require('path');
 const fs = require('fs');
 const { parse } = require('csv-parse');
 
+const makeTrackEntry = (trackName, trackId) => ({
+		name: trackName,
+		id: trackId,
+		url: `https://open.spotify.com/track/${trackId}`
+})
+
 // make an initial album entry for an artist
-const makeAlbumEntry = (albumName, releaseDate, trackName) => ({
+const makeAlbumEntry = (albumName, releaseDate, trackName, trackId) => ({
 	album: albumName,
 	release: releaseDate,
-	tracks: [trackName]
+	tracks: [makeTrackEntry(trackName, trackId)]
 });
 
 // make an initial artist entry
-const makeArtistEntry = (artistName, albumName, releaseDate, trackName) => ({
+const makeArtistEntry = (artistName, albumName, releaseDate, trackName, trackId) => ({
 	artist: artistName,
-	albums: [makeAlbumEntry(albumName, releaseDate, trackName)]
+	albums: [makeAlbumEntry(albumName, releaseDate, trackName, trackId)]
 });
 
 // run a file through csv-parse, handing records off to formatFile() when done
@@ -49,11 +55,12 @@ const formatFile = (file, records) => {
 		trackCount++;
 
 		// clean up quotes in parsed records
-		const [artistName, trackName, albumName, releaseDate] = [
+		const [artistName, trackName, albumName, trackId, releaseDate] = [
 			record[0].replaceAll('\"', "'"),
 			record[1].replaceAll('\\"', "'"),
 			record[2].replaceAll('\\"', "'"),
 			record[3].replaceAll('\\"', "'"),
+			record[4].replaceAll('\\"', "'"),
 		];
 
 		const artistIndex = output.findIndex((artist) => artist.artist === artistName);
@@ -62,16 +69,16 @@ const formatFile = (file, records) => {
 			const albumIndex = output[artistIndex].albums.findIndex((album) => album.album === albumName);
 			if (albumIndex > -1) {
 				// album was already encountered; add track to its entry
-				output[artistIndex].albums[albumIndex].tracks.push(trackName);
+				output[artistIndex].albums[albumIndex].tracks.push(makeTrackEntry(trackName, trackId));
 			}
 			else {
 				// new album encountered; initialise its entry
-				output[artistIndex].albums.push(makeAlbumEntry(albumName, releaseDate, trackName));
+				output[artistIndex].albums.push(makeAlbumEntry(albumName, releaseDate, trackName, trackId));
 			}
 		}
 		else {
 			// new artist encountered; initialise its entry
-			output.push(makeArtistEntry(artistName, albumName, releaseDate, trackName))
+			output.push(makeArtistEntry(artistName, albumName, releaseDate, trackName, trackId))
 		}
 	});
 
